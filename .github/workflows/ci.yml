@@ -1,0 +1,47 @@
+name: CI
+
+# Run on every push to main, and on pull requests into main
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    name: Test (end-to-end with docker compose)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Start the whole app and wait until it is healthy
+        run: docker compose up -d --build --wait
+
+      - name: Vote page responds
+        run: curl -fsS http://localhost:8080 > /dev/null
+
+      - name: Result page responds
+        run: curl -fsS http://localhost:8081 > /dev/null
+
+      - name: A vote travels vote -> redis -> worker -> postgres
+        run: |
+          curl -fsS -X POST --data "vote=a" http://localhost:8080 > /dev/null
+          for i in $(seq 1 20); do
+            count=$(docker compose exec -T db psql -U postgres -tAc "SELECT COUNT(*) FROM votes" 2>/dev/null || echo 0)
+            if [ "$count" -ge 1 ]; then
+              echo "Vote reached the database (count=$count)"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Vote never reached the database"
+          exit 1
+
+      - name: Show container logs if anything failed
+        if: failure()
+        run: docker compose logs
+
+      - name: Stop the app
+        if: always()
+        run: docker compose down -v
