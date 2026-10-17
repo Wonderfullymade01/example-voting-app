@@ -1,15 +1,16 @@
 # Pinned Node 22 (LTS) slim image: exact version + digest so every build is identical
 FROM node:22.23.3-slim@sha256:c3de60bf2f9dd0ac6370e6117950ff62d6e339527e7472301c9c78a017978392
 
-# add curl for healthcheck, tini to handle signals properly as PID 1
+# add curl for healthcheck, tini for signals; upgrade installs Debian security fixes
 RUN apt-get update && \
+    apt-get upgrade -y && \
     apt-get install -y --no-install-recommends curl tini && \
     rm -rf /var/lib/apt/lists/*
 
 WORKDIR /usr/local/app
 
-# have nodemon available for local dev use (file watching)
-RUN npm install -g nodemon
+# newer npm (its bundled libraries had CVEs) and nodemon for local dev, both pinned
+RUN npm install -g npm@12.2.0 nodemon@3.1.14
 
 COPY package*.json ./
 

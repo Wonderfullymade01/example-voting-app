@@ -13,6 +13,9 @@ WORKDIR /usr/local/app
 COPY requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
+# setuptools/wheel are only needed to install packages, not to run the app; removing them removes their CVEs
+RUN pip uninstall -y setuptools wheel
+
 # Create a non-root user (uid 10001) to run the app
 RUN useradd --create-home --uid 10001 appuser
 
