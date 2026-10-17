@@ -9,8 +9,8 @@ RUN apt-get update && \
 
 WORKDIR /usr/local/app
 
-# newer npm (its bundled libraries had CVEs) and nodemon for local dev, both pinned
-RUN npm install -g npm@12.2.0 nodemon@3.1.14
+# have nodemon available for local dev use (file watching), pinned
+RUN npm install -g nodemon@3.1.14
 
 COPY package*.json ./
 
@@ -18,6 +18,10 @@ COPY package*.json ./
 RUN npm ci && \
  npm cache clean --force && \
  mv /usr/local/app/node_modules /node_modules
+
+ # npm/npx/corepack are only needed at build time; remove them (and their bundled libraries) from the image
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
+    /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack
 
 # Copy our code and make the built-in non-root "node" user the owner (instead of root)
 COPY --chown=node:node . .
