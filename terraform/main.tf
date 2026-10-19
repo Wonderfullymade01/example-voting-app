@@ -17,6 +17,12 @@ data "aws_subnets" "default" {
   }
 }
 
+# The IAM user GitHub Actions deploys with. It was created by hand in IAM (not by Terraform)
+# so it and its access key survive terraform destroy / apply.
+data "aws_iam_user" "github_actions" {
+  user_name = "github-actions-deployer"
+}
+
 # --- The EKS cluster, built with the community EKS module ---
 
 module "eks" {
@@ -34,6 +40,24 @@ module "eks" {
 
   # Make the IAM user running terraform (capstone-admin) an admin of the cluster
   enable_cluster_creator_admin_permissions = true
+
+
+  # GitHub Actions may deploy into the "voting-app" namespace only, nothing else in the cluster
+  access_entries = {
+    github_actions = {
+      principal_arn = data.aws_iam_user.github_actions.arn
+
+      policy_associations = {
+        edit = {
+          policy_arn = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSEditPolicy"
+          access_scope = {
+            type       = "namespace"
+            namespaces = ["voting-app"]
+          }
+        }
+      }
+    }
+  }
 
   vpc_id     = data.aws_vpc.default.id
   subnet_ids = data.aws_subnets.default.ids
