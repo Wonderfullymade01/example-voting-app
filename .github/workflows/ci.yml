@@ -101,3 +101,61 @@ jobs:
         if: github.event_name == 'push'
         run: docker push ${{ env.IMAGE }}
 
+  deploy:
+    name: Deploy to EKS with Helm 
+    needs: build-scan-push
+    # Only deploy real pushes to main, never pull requests
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    env:
+      AWS_REGION: eu-north-1
+      CLUSTER_NAME: voting-app
+      NAMESPACE: voting-app
+
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Log in to AWS as github-actions-deployer
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # The cluster is destroyed every evening to save money; skip (don't fail) when it isn't there
+      - name: Check the cluster is running
+        id: cluster
+        run: |
+          if aws eks describe-cluster --name "$CLUSTER_NAME" --region "$AWS_REGION" > /dev/null 2> err.txt; then
+            echo "up=true" >> "$GITHUB_OUTPUT"
+          elif grep -q ResourceNotFoundException err.txt; then
+            echo "::warning::EKS cluster $CLUSTER_NAME is not running - skipping deploy"
+            echo "up=false" >> "$GITHUB_OUTPUT"
+          else
+            cat err.txt
+            exit 1
+          fi
+
+      - name: Connect kubectl to the cluster
+        if: steps.cluster.outputs.up == 'true'
+        run: aws eks update-kubeconfig --region "$AWS_REGION" --name "$CLUSTER_NAME"
+
+      - name: Deploy with Helm (image tag = this commit)
+        if: steps.cluster.outputs.up == 'true'
+        run: |
+          helm upgrade --install voting-app ./helm/voting-app \
+            --namespace "$NAMESPACE" \
+            --set image.tag="${{ github.sha }}" \
+            --set db.password="${{ secrets.POSTGRES_PASSWORD }}" \
+            --wait --timeout 5m
+
+      - name: Show what is running
+        if: always() && steps.cluster.outputs.up == 'true'
+        run: kubectl get pods,svc -n "$NAMESPACE" -o wide
+
+
+
