@@ -1,0 +1,60 @@
+# Vote: the web page where people vote; pushes each vote onto the Redis queue
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vote
+  labels:
+    app: vote
+spec:
+  replicas: {{ .Values.vote.replicas }}
+  selector:
+    matchLabels:
+      app: vote
+  template:
+    metadata:
+      labels:
+        app: vote
+    spec:
+      # Run as the non-root "appuser" baked into the image in step 2 (uid 10001)
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+      containers:
+        - name: vote
+          image: "{{ .Values.image.registry }}/vote:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - containerPort: {{ .Values.vote.containerPort }}
+          # Ready = the page loads; only then does the Service send it traffic
+          readinessProbe:
+            httpGet:
+              path: /
+              port: {{ .Values.vote.containerPort }}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          # Alive = still answering; if it stops, Kubernetes restarts the container
+          livenessProbe:
+            httpGet:
+              path: /
+              port: {{ .Values.vote.containerPort }}
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+---
+# Service: public entry point; on EKS, type LoadBalancer creates an AWS load balancer with a public URL
+apiVersion: v1
+kind: Service
+metadata:
+  name: vote
+  labels:
+    app: vote
+spec:
+  type: {{ .Values.vote.service.type }}
+  selector:
+    app: vote
+  ports:
+    - port: {{ .Values.vote.service.port }}
+      targetPort: {{ .Values.vote.containerPort }}

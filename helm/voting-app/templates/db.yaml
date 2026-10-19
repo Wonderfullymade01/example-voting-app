@@ -1,0 +1,65 @@
+# Secret: Postgres credentials; the password comes from --set db.password at install time, never from Git
+apiVersion: v1
+kind: Secret
+metadata:
+  name: db-credentials
+  labels:
+    app: db
+type: Opaque
+stringData:
+  POSTGRES_USER: {{ .Values.db.user | quote }}
+  POSTGRES_PASSWORD: {{ required "db.password is required - pass it with --set db.password=..." .Values.db.password | quote }}
+---
+# Postgres: stores the votes; worker writes them, result reads them
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: db
+  labels:
+    app: db
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: db
+  template:
+    metadata:
+      labels:
+        app: db
+    spec:
+      containers:
+        - name: postgres
+          image: {{ .Values.db.image }}
+          # Load POSTGRES_USER and POSTGRES_PASSWORD from the Secret above
+          envFrom:
+            - secretRef:
+                name: db-credentials
+          ports:
+            - containerPort: {{ .Values.db.port }}
+          # Only send traffic once Postgres says it is ready for connections
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", {{ .Values.db.user | quote }}]
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          volumeMounts:
+            - name: db-data
+              mountPath: /var/lib/postgresql/data
+      volumes:
+        - name: db-data
+          emptyDir: {}
+---
+# Service: gives Postgres the stable in-cluster name "db" (the app code expects exactly this)
+apiVersion: v1
+kind: Service
+metadata:
+  name: db
+  labels:
+    app: db
+spec:
+  type: ClusterIP
+  selector:
+    app: db
+  ports:
+    - port: {{ .Values.db.port }}
+      targetPort: {{ .Values.db.port }}

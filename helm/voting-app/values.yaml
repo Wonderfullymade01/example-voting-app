@@ -1,0 +1,38 @@
+# One values file for the whole voting app.
+# The CI pipeline overrides image.tag with the new commit SHA on every deploy.
+
+# Our own images (vote, result, worker), built and pushed by GitHub Actions
+image:
+  registry: ghcr.io/wonderfullymade01
+  tag: "369f350385d7aa25eb0e0e21ce1fd88625d9f515"
+  pullPolicy: IfNotPresent
+
+vote:
+  replicas: 2
+  containerPort: 8080
+  service:
+    type: LoadBalancer   # gives a public URL on AWS
+    port: 80
+
+result:
+  replicas: 1
+  containerPort: 8080
+  service:
+    type: LoadBalancer
+    port: 80
+
+worker:
+  replicas: 1
+
+# Third-party images, pinned by version + digest (same idea as step 2)
+redis:
+  image: redis:8.10.2-alpine@sha256:3811787313eba226a2ef38658c6ccb91cd5e110edc89c37767de373120a0e5a0
+  port: 6379
+
+db:
+  image: postgres:15.19-alpine@sha256:f7d23353e1b15400d22ebe31189f4d314b87a4c129cc400c8c2d8d4ca127bf81
+  port: 5432
+  user: postgres
+  # No password in Git: pass it at install time with --set db.password=...
+  # (the pipeline will read it from a GitHub Secret)
+  password: ""
