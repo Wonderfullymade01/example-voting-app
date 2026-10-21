@@ -190,9 +190,13 @@ After the fixes, the whole pipeline is green, and the images are on GHCR tagged 
 The pipeline deployed the app to EKS. The two screenshots show the two vote replicas (different container IDs)
 behind the load balancer:
 
-![Vote page on EKS, pod 1](docs/images/10-app-vote-pod1.png)
+| Vote | Result straight after |
+|---|---|
+| ![Vote for Cats, served by pod 4mg4m](docs/images/10-app-vote-pod1.png) | ![Result: Cats 100%](docs/images/10c-app-result-cats.png) |
+| ![Vote changed to Dogs, served by pod l5c7m](docs/images/10b-app-vote-pod2.png) | ![Result: Dogs 100%](docs/images/10d-app-result-dogs.png) |
 
-![Vote page on EKS, pod 2](docs/images/10b-app-vote-pod2.png)
+Each browser gets one vote, so changing the vote moves the single vote from Cats to Dogs. The two votes were also
+served by different vote pods (`4mg4m` and `l5c7m`), which shows the load balancer sharing traffic across both replicas.
 
 ![Result page on EKS via AWS load balancer](docs/images/11-app-result-eks.png)
 
